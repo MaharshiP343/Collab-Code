@@ -1,102 +1,74 @@
-# 🚀 CollabCode — Real-time Collaborative IDE
+# CollabCode
 
-A real-time collaborative coding platform supporting **Python**, **Java**, and **C++**.
+Real-time collaborative code editor for Python, Java, and C++.
 
-## Features
-- 🔴 **Live collaboration** — edits sync instantly across all users in a room
-- 🎨 **Colored underlines** — each user's code is underlined in their chosen color  
-- ▶️ **Run in browser** — powered by the Piston API (no setup needed)
-- 📥 **Download code** — save your work before leaving
-- 📤 **Upload code** — load existing files when joining a room
-- 🔗 **Share by Room ID** — no sign-up needed, just a name and a room code
+Built this because sharing code over WhatsApp and Google Docs is painful. Open a room, share the ID, everyone edits the same file live.
 
 ---
 
-## Quick Start (Local)
+## What it does
+
+- Anyone with the room ID joins the same editor
+- Code syncs instantly as you type — no refresh needed
+- Each person picks a color, their edits show underlined in that color
+- Switch between Python, Java, C++ — changes for everyone in the room
+- Run code directly in the browser (no installs needed)
+- Download your code before you leave
+- Upload an existing file when you join
+
+---
+
+## Running locally
+
+You need Node.js v18 or higher.
 
 ```bash
-# 1. Install dependencies
-npm run setup
-
-# 2. Start dev servers (frontend + backend)
+git clone https://github.com/YOUR_USERNAME/collab-code
+cd collab-code
+npm install
+cd client && npm install && cd ..
 npm run dev
-# Frontend: http://localhost:5173
-# Backend:  http://localhost:3001
 ```
+
+Open `http://localhost:5173`. To test collaboration open a second browser tab with the same room ID.
 
 ---
 
-## Deploy with Docker (Recommended)
+## Deploying
+
+### Render (free, no card)
+
+1. Push to GitHub
+2. New Web Service on render.com, connect the repo
+3. Build: `npm install && cd client && npm install && npm run build && cd ..`
+4. Start: `node server.js`
+5. Instance type: Free
+
+Done. You get a `.onrender.com` URL you can share.
+
+Note: free tier sleeps after 15 min of inactivity, first load after that takes ~30 seconds.
+
+### Docker
 
 ```bash
-# Build and run
 docker-compose up -d
-
-# Access at http://localhost:3001
 ```
 
----
-
-## Deploy to Render.com (Free Tier)
-
-1. Push this project to GitHub
-2. Go to [render.com](https://render.com) → New Web Service
-3. Connect your GitHub repo
-4. Settings:
-   - **Runtime**: Node
-   - **Build Command**: `npm run setup && npm run build`
-   - **Start Command**: `npm start`
-   - **Port**: `3001`
-5. Click Deploy ✅
+Runs on port 3001.
 
 ---
 
-## Deploy to Railway.app
+## Stack
 
-```bash
-# Install Railway CLI
-npm i -g @railway/cli
-
-# Login and deploy
-railway login
-railway init
-railway up
-```
+- React + Monaco Editor (the same editor as VS Code)
+- Socket.io for real-time sync
+- Node.js + Express backend
+- Judge0 CE API for code execution
 
 ---
 
-## Deploy to Fly.io
+## Planned
 
-```bash
-# Install flyctl
-curl -L https://fly.io/install.sh | sh
-
-# Deploy
-fly launch
-fly deploy
-```
-
----
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3001` | Server port |
-| `CORS_ORIGIN` | `*` | Allowed CORS origins (set to your domain in production) |
-| `NODE_ENV` | `development` | Environment |
-
----
-
-## Coming Soon
-- 💬 AI Chat Assistant
-- 🤖 AI Debugging (auto-detects errors at runtime)
-- 🧠 Code completion with Claude
-
----
-
-## Tech Stack
-- **Frontend**: React 18, Monaco Editor, Vite
-- **Backend**: Node.js, Express, Socket.io
-- **Code Execution**: [Piston API](https://github.com/engineer-man/piston)
-- **Deploy**: Docker, Render, Railway, Fly.io
+- AI chat assistant in the sidebar
+- AI debugging when code fails to compile
+- Code completion
