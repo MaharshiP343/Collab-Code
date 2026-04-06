@@ -1,12 +1,12 @@
 .container {
   min-height: 100vh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   background: var(--bg);
   position: relative;
-  overflow: hidden;
-  padding: 2rem;
+  overflow-y: auto;
+  padding: 1.5rem 1rem;
 }
 
 .grid {
@@ -34,20 +34,21 @@
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 2.5rem;
+  padding: 1.75rem;
   width: 100%;
   max-width: 480px;
   animation: fadeUp 0.5s ease;
   position: relative;
   z-index: 1;
   box-shadow: 0 0 60px rgba(0, 229, 160, 0.05), 0 20px 60px rgba(0,0,0,0.5);
+  margin: auto;
 }
 
 .logo {
   display: flex;
   align-items: center;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .logoIcon {
@@ -80,7 +81,7 @@
 .langBadges {
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
 }
 
 .langBadge {
@@ -96,7 +97,7 @@
 .form {
   display: flex;
   flex-direction: column;
-  gap: 1.4rem;
+  gap: 1rem;
 }
 
 .field {
@@ -175,8 +176,8 @@
 }
 
 .colorSwatch {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--swatch);
   border: 2px solid transparent;
