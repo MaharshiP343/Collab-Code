@@ -1,0 +1,22 @@
+{
+  "name": "collab-code",
+  "version": "1.0.0",
+  "description": "Real-time collaborative code editor",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev:server": "nodemon server.js",
+    "dev:client": "cd client && npm run dev",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "build": "cd client && npm run build",
+    "setup": "npm install && cd client && npm install"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.2"
+  }
+}

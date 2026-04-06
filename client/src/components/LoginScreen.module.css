@@ -1,0 +1,335 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  position: relative;
+  overflow: hidden;
+  padding: 2rem;
+}
+
+.grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0, 229, 160, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 160, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+.scanline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 200px;
+  background: linear-gradient(transparent, rgba(0, 229, 160, 0.03), transparent);
+  animation: scanline 6s linear infinite;
+  pointer-events: none;
+}
+
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 480px;
+  animation: fadeUp 0.5s ease;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 0 60px rgba(0, 229, 160, 0.05), 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.logoIcon {
+  font-family: var(--font-code);
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-glow);
+  border-radius: 10px;
+  padding: 0.4rem 0.7rem;
+  text-shadow: 0 0 20px var(--accent);
+}
+
+.logoTitle {
+  font-family: var(--font-ui);
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.logoSub {
+  font-size: 0.8rem;
+  color: var(--text2);
+  font-weight: 400;
+  margin-top: 1px;
+}
+
+.langBadges {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.langBadge {
+  font-family: var(--font-code);
+  font-size: 0.72rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 20px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text2);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.optional {
+  font-weight: 400;
+  text-transform: none;
+  color: var(--text3);
+}
+
+.input {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: var(--font-code);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+}
+
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.input::placeholder { color: var(--text3); }
+
+.roomRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.roomRow .input { flex: 1; }
+
+.genBtn {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--accent);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  white-space: nowrap;
+}
+
+.genBtn:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: var(--text3);
+}
+
+.colorGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.colorSwatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--swatch);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  position: relative;
+}
+
+.colorSwatch:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 10px var(--swatch);
+}
+
+.colorSelected {
+  border-color: white;
+  transform: scale(1.15);
+  box-shadow: 0 0 12px var(--swatch);
+}
+
+.colorSelected::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  color: rgba(0,0,0,0.7);
+  font-weight: 700;
+}
+
+.dropzone {
+  border: 2px dashed var(--border2);
+  border-radius: 10px;
+  padding: 1.2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  font-size: 0.85rem;
+  color: var(--text2);
+}
+
+.dropzone:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.dropzoneDragging {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.dropzoneFilled {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.dropContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.dropIcon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.dropFormats {
+  font-family: var(--font-code);
+  font-size: 0.72rem;
+  color: var(--text3);
+}
+
+.uploadedFile {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+  color: var(--accent);
+  font-family: var(--font-code);
+  font-size: 0.85rem;
+}
+
+.fileIcon { font-size: 1rem; }
+
+.clearFile {
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+}
+
+.clearFile:hover { color: var(--red); background: rgba(255,95,87,0.1); }
+
+.error {
+  font-size: 0.82rem;
+  color: var(--red);
+  background: rgba(255, 95, 87, 0.1);
+  border: 1px solid rgba(255, 95, 87, 0.3);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+}
+
+.joinBtn {
+  position: relative;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 10px;
+  padding: 0.875rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.15s, box-shadow 0.15s;
+  margin-top: 0.3rem;
+}
+
+.joinBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 30px var(--accent-glow);
+}
+
+.joinBtn:active { transform: translateY(0); }
+
+.joinBtnInner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.joinArrow {
+  font-size: 1.1rem;
+  transition: transform 0.2s;
+}
+
+.joinBtn:hover .joinArrow { transform: translateX(3px); }
+
+.joinBtnGlow {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 30%, rgba(255,255,255,0.2));
+  pointer-events: none;
+}
