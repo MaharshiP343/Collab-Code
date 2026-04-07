@@ -76,7 +76,6 @@ export default function EditorScreen({ socket, session, onLeave }) {
   const editorRef      = useRef(null);
   const monacoRef      = useRef(null);
   const isRemote       = useRef(false);
-  const selfIdRef      = useRef(null);
   const userColorMap   = useRef({});            // userId → color
   // Active Monaco decoration IDs per user — NEVER cleared except on editor reset
   const decIds         = useRef({});            // userId → [id,...]
@@ -112,13 +111,17 @@ export default function EditorScreen({ socket, session, onLeave }) {
     decIds.current[userId] = editor.deltaDecorations(oldIds, decs);
   }, []);
 
-  // Apply a full decoration map (userId → ranges[]) — used on join & full resets
+  // Apply a full decoration map (userId → ranges[]) — this fully replaces what
+  // the client thinks authorship is, so every user renders the same ownership.
   const applyDecorationMap = useCallback((decorationMap) => {
-    if (!decorationMap) return;
-    Object.entries(decorationMap).forEach(([userId, ranges]) => {
-      if (userColorMap.current[userId]) {
-        applyUserDecorations(userId, ranges);
-      }
+    const knownUserIds = new Set([
+      ...Object.keys(decIds.current),
+      ...Object.keys(decorationMap || {})
+    ]);
+
+    knownUserIds.forEach((userId) => {
+      if (!userColorMap.current[userId]) return;
+      applyUserDecorations(userId, decorationMap?.[userId] || []);
     });
   }, [applyUserDecorations]);
 
@@ -131,7 +134,7 @@ export default function EditorScreen({ socket, session, onLeave }) {
   }, []);
 
   // ── Remote content change ─────────────────────────────────────────────────
-  const applyRemoteChanges = useCallback((changes, userId, userRanges) => {
+  const applyRemoteChanges = useCallback((changes) => {
     const editor = editorRef.current;
     const monaco = monacoRef.current;
     if (!editor || !monaco) return;
@@ -148,13 +151,7 @@ export default function EditorScreen({ socket, session, onLeave }) {
     isRemote.current = true;
     editor.executeEdits('remote', edits);
     isRemote.current = false;
-
-    // Server sends back the definitive ranges for the user who just typed
-    // Replace their decorations with the server-authoritative version
-    if (userRanges) {
-      applyUserDecorations(userId, userRanges);
-    }
-  }, [applyUserDecorations]);
+  }, []);
 
   // ── Socket setup ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -168,7 +165,6 @@ export default function EditorScreen({ socket, session, onLeave }) {
     const onConnect = () => {
       setConnected(true);
       setSelfId(socket.id);
-      selfIdRef.current = socket.id;
       registerColor(socket.id, color);
       setStatus(`Room: ${roomId}`);
       doJoin();
@@ -193,7 +189,6 @@ export default function EditorScreen({ socket, session, onLeave }) {
       }
       setLanguage(roomLang);
       setSelfId(socket.id);
-      selfIdRef.current = socket.id;
       setConnected(true);
       setStatus(`Room: ${roomId}`);
 
@@ -236,8 +231,8 @@ export default function EditorScreen({ socket, session, onLeave }) {
       }
     };
 
-    const onContentChange = ({ changes, userId, userRanges }) => {
-      applyRemoteChanges(changes, userId, userRanges);
+    const onContentChange = ({ changes }) => {
+      applyRemoteChanges(changes);
     };
 
     const onCodeChange = ({ code: newCode }) => {
@@ -249,7 +244,7 @@ export default function EditorScreen({ socket, session, onLeave }) {
       }
     };
 
-    const onDecorationMap = ({ decorationMap }) => {
+    const onAuthorshipUpdate = ({ decorationMap }) => {
       setTimeout(() => applyDecorationMap(decorationMap), 100);
     };
 
@@ -263,7 +258,7 @@ export default function EditorScreen({ socket, session, onLeave }) {
     socket.on('user-left',        onUserLeft);
     socket.on('content-change',   onContentChange);
     socket.on('code-change',      onCodeChange);
-    socket.on('decoration-map',   onDecorationMap);
+    socket.on('authorship-update', onAuthorshipUpdate);
     socket.on('language-change',  onLanguageChange);
 
     if (socket.connected) onConnect();
@@ -278,7 +273,7 @@ export default function EditorScreen({ socket, session, onLeave }) {
       socket.off('user-left',       onUserLeft);
       socket.off('content-change',  onContentChange);
       socket.off('code-change',     onCodeChange);
-      socket.off('decoration-map',  onDecorationMap);
+      socket.off('authorship-update', onAuthorshipUpdate);
       socket.off('language-change', onLanguageChange);
     };
   }, [socket, roomId, color, initialCode, registerColor, applyDecorationMap, applyRemoteChanges]);
@@ -294,36 +289,9 @@ export default function EditorScreen({ socket, session, onLeave }) {
       if (isRemote.current) return;
       const changes = e.changes;
       const fullCode = editor.getValue();
-      // Send delta to server — server computes updated ranges and sends back via content-change
+      // Send delta to server — server computes the authoritative authorship map
+      // and broadcasts it back to every client.
       socket?.emit('content-change', { changes, fullCode });
-      // Own decorations will come back via the content-change broadcast to others
-      // But we need to update our OWN decorations locally too.
-      // We'll receive it reflected back only if we also listen to our own emit.
-      // Simpler: compute approximate own ranges here for immediate feedback
-      // then server corrects via next join-state if needed.
-      // For now: track own typing directly
-      const myId = selfIdRef.current;
-      if (!myId) return;
-      changes.forEach(c => {
-        if (!c.text) return;
-        const lines = c.text.split('\n');
-        const endLine = c.range.startLineNumber + lines.length - 1;
-        const endCol  = lines.length === 1
-          ? c.range.startColumn + c.text.length
-          : lines[lines.length - 1].length + 1;
-        if (c.text.length === 0) return;
-        const safeId = myId.replace(/[^a-z0-9]/gi, '');
-        const dec = {
-          range: new monaco.Range(c.range.startLineNumber, c.range.startColumn, endLine, endCol),
-          options: {
-            inlineClassName: `tb-${safeId}`,
-            stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
-          }
-        };
-        const added = editor.deltaDecorations([], [dec]);
-        if (!decIds.current[myId]) decIds.current[myId] = [];
-        decIds.current[myId].push(...added);
-      });
     });
   };
 

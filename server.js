@@ -95,6 +95,12 @@ function buildDecorationMap(runs, code) {
   return map;
 }
 
+function emitAuthorship(roomId, room) {
+  io.to(roomId).emit('authorship-update', {
+    decorationMap: buildDecorationMap(room.authorRuns, room.code)
+  });
+}
+
 // ── Socket events ────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
 
@@ -146,12 +152,11 @@ io.on('connection', (socket) => {
     room.code = fullCode;
 
     // Broadcast delta to others + updated decoration map for just this user
-    const userRanges = flatToRanges(flat, fullCode, socket.id);
     socket.to(socket.roomId).emit('content-change', {
       changes,
-      userId: socket.id,
-      userRanges  // updated ranges for the typing user only
+      userId: socket.id
     });
+    emitAuthorship(socket.roomId, room);
   });
 
   socket.on('code-change', ({ code }) => {
@@ -160,9 +165,8 @@ io.on('connection', (socket) => {
     room.code = code;
     // Reset authorship — uploaded file, attribute all to uploader
     room.authorRuns = code.length > 0 ? [{ userId: socket.id, len: code.length }] : [];
-    const decorationMap = buildDecorationMap(room.authorRuns, code);
     socket.to(socket.roomId).emit('code-change', { code });
-    socket.to(socket.roomId).emit('decoration-map', { decorationMap });
+    emitAuthorship(socket.roomId, room);
   });
 
   socket.on('language-change', ({ language }) => {
