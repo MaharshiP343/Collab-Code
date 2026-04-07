@@ -428,15 +428,19 @@ export default function EditorScreen({ socket, session, onLeave }) {
 
           {/* Toggle */}
           <button
-            className={`${styles.underlineToggle} ${showUnderlines ? styles.ulOn : styles.ulOff}`}
+            className={`${styles.underlineToggle} ${showUnderlines ? styles.underlineToggleOn : styles.underlineToggleOff}`}
             onClick={() => handleToggle(!showUnderlines)}
             title={showUnderlines ? 'Hide underlines' : 'Show underlines'}
+            aria-label={showUnderlines ? 'Hide underlines' : 'Show underlines'}
           >
-            <span>▁</span>
-            <span className={styles.ulLabel}>{showUnderlines ? 'On' : 'Off'}</span>
+            <span className={styles.underlineToggleIcon}>▁</span>
+            <span className={styles.underlineToggleLabel}>{showUnderlines ? 'Underlines On' : 'Underlines Off'}</span>
           </button>
 
-          <button className={styles.iconBtn} onClick={downloadCode} title="Download">⬇</button>
+          <button className={styles.iconBtn} onClick={downloadCode} title="Download code" aria-label="Download code">
+            <span className={styles.iconBtnIcon}>⬇</span>
+            <span className={styles.iconBtnLabel}>Download</span>
+          </button>
           <button className={`${styles.runBtn} ${running ? styles.runBtnRunning : ''}`}
             onClick={runCode} disabled={running}>
             {running ? <><span className={styles.runSpinner}/>Running...</> : <>▶ Run</>}

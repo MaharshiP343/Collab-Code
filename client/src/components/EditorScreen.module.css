@@ -199,23 +199,40 @@
 }
 
 .iconBtn {
-  background: none;
+  background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 0.3rem 0.45rem;
-  color: var(--text2);
+  padding: 0.3rem 0.55rem;
+  color: var(--text);
   cursor: pointer;
-  font-size: 0.85rem;
   display: flex;
   align-items: center;
+  gap: 0.35rem;
   justify-content: center;
   transition: all 0.15s;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: var(--font-ui);
+  white-space: nowrap;
 }
 
 .iconBtn:hover {
   background: var(--bg3);
-  border-color: var(--border2);
-  color: var(--text);
+  border-color: var(--accent-glow);
+  color: var(--accent);
+}
+
+.iconBtnIcon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.iconBtnLabel {
+  display: none;
+}
+
+@media (min-width: 960px) {
+  .iconBtnLabel { display: inline; }
 }
 
 .runBtn {
@@ -453,11 +470,14 @@
   display: flex;
   align-items: center;
   gap: 0.3rem;
+  background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.28rem 0.5rem;
   font-size: 0.74rem;
+  font-weight: 600;
   font-family: var(--font-ui);
+  color: var(--text);
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
@@ -483,9 +503,13 @@
 .underlineToggleIcon { font-size: 0.9rem; }
 
 .underlineToggleLabel {
-  display: none;
+  display: inline;
 }
 
-@media (min-width: 1100px) {
-  .underlineToggleLabel { display: inline; }
+@media (max-width: 1100px) {
+  .underlineToggleLabel {
+    max-width: 5.6rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
