@@ -30,8 +30,7 @@ const MONACO_THEME = {
     { token: 'type', foreground: '74b9ff' },
   ],
   colors: {
-    'editor.background': '#0d1117',
-    'editor.foreground': '#e6edf3',
+    'editor.background': '#0d1117', 'editor.foreground': '#e6edf3',
     'editor.lineHighlightBackground': '#161b22',
     'editor.selectionBackground': '#264f7840',
     'editorCursor.foreground': '#00e5a0',
@@ -39,122 +38,156 @@ const MONACO_THEME = {
     'editorLineNumber.activeForeground': '#8b949e',
     'editorGutter.background': '#0d1117',
     'scrollbarSlider.background': '#30363d80',
-    'scrollbarSlider.hoverBackground': '#3d4450cc',
   }
 };
 
-// Inject a per-user CSS class for underline color
+// ── CSS helpers ──────────────────────────────────────────────────────────────
+
+// Inject per-user underline color class (idempotent)
 function injectUserStyle(userId, color) {
   const safeId = userId.replace(/[^a-z0-9]/gi, '');
-  const styleId = `collab-style-${safeId}`;
-  if (document.getElementById(styleId)) return;
-  const style = document.createElement('style');
-  style.id = styleId;
-  style.textContent = `
-    .typed-by-${safeId} {
-      border-bottom: 2.5px solid ${color};
-      padding-bottom: 1px;
-    }
-  `;
-  document.head.appendChild(style);
+  const id = `collab-style-${safeId}`;
+  if (document.getElementById(id)) return;
+  const s = document.createElement('style');
+  s.id = id;
+  s.textContent = `.typed-by-${safeId} { border-bottom: 2.5px solid ${color} !important; padding-bottom: 1px; }`;
+  document.head.appendChild(s);
 }
 
-// Calculate end position of inserted text given a start position
-function calcInsertedRange(startLine, startCol, text) {
+// Hide ALL underlines via a single override rule (decorations stay alive in Monaco)
+function hideUnderlinesCSS() {
+  if (document.getElementById('collab-underlines-hidden')) return;
+  const s = document.createElement('style');
+  s.id = 'collab-underlines-hidden';
+  s.textContent = `[class*="typed-by-"] { border-bottom: none !important; }`;
+  document.head.appendChild(s);
+}
+
+// Remove the override — underlines reappear at Monaco's tracked positions
+function showUnderlinesCSS() {
+  document.getElementById('collab-underlines-hidden')?.remove();
+}
+
+// Calculate where inserted text ends
+function calcInsertEnd(startLine, startCol, text) {
   const lines = text.split('\n');
-  if (lines.length === 1) {
-    return { endLine: startLine, endCol: startCol + text.length };
-  }
-  return {
-    endLine: startLine + lines.length - 1,
-    endCol: lines[lines.length - 1].length + 1
-  };
+  if (lines.length === 1) return { endLine: startLine, endCol: startCol + text.length };
+  return { endLine: startLine + lines.length - 1, endCol: lines[lines.length - 1].length + 1 };
 }
 
+// ── Component ────────────────────────────────────────────────────────────────
 export default function EditorScreen({ socket, session, onLeave }) {
   const { name, roomId, color, initialCode } = session;
 
-  const [language, setLanguage]     = useState('python');
-  const [users, setUsers]           = useState([]);
-  const [output, setOutput]         = useState('');
-  const [running, setRunning]       = useState(false);
-  const [outputOpen, setOutputOpen] = useState(false);
-  const [copied, setCopied]         = useState(false);
-  const [connected, setConnected]   = useState(false);
-  const [selfId, setSelfId]         = useState(null);
-  const [status, setStatus]         = useState('Connecting...');
+  const [language, setLanguage]             = useState('python');
+  const [users, setUsers]                   = useState([]);
+  const [output, setOutput]                 = useState('');
+  const [running, setRunning]               = useState(false);
+  const [outputOpen, setOutputOpen]         = useState(false);
+  const [copied, setCopied]                 = useState(false);
+  const [connected, setConnected]           = useState(false);
+  const [selfId, setSelfId]                 = useState(null);
+  const [status, setStatus]                 = useState('Connecting...');
   const [showUnderlines, setShowUnderlines] = useState(true);
 
-  const editorRef       = useRef(null);
-  const monacoRef       = useRef(null);
-  const isRemoteChange  = useRef(false);   // true while applying remote edits
-  const usersRef        = useRef([]);
-  const selfIdRef       = useRef(null);
-  const showUnderlinesRef = useRef(true);
+  const editorRef      = useRef(null);
+  const monacoRef      = useRef(null);
+  const isRemoteChange = useRef(false);
+  const selfIdRef      = useRef(null);
 
-  // Per-user typed-text decorations: userId -> array of decoration IDs
-  const typedDecorations = useRef({});
+  // userId → color  (never cleared, populated as we meet users)
+  const userColorMap = useRef({});
 
-  useEffect(() => { usersRef.current = users; }, [users]);
-  useEffect(() => {
-    selfIdRef.current = selfId;
-    if (selfId) injectUserStyle(selfId, color);
-  }, [selfId, color]);
-  useEffect(() => { showUnderlinesRef.current = showUnderlines; }, [showUnderlines]);
+  // userId → [Monaco decoration IDs]
+  // Decorations are ALWAYS kept alive so Monaco tracks their positions.
+  // We just CSS-hide them when the toggle is off.
+  const decorationIds = useRef({});
 
-  // ── Add typed-range decorations for a user ──────────────────────────────────
-  const addTypedDecoration = useCallback((userId, uColor, startLine, startCol, endLine, endCol) => {
+  // ── Register user color ────────────────────────────────────────────────────
+  const registerColor = useCallback((userId, uColor) => {
+    if (userColorMap.current[userId]) return; // already registered
+    userColorMap.current[userId] = uColor;
+    injectUserStyle(userId, uColor);
+  }, []);
+
+  // ── Apply one decoration range for a user ─────────────────────────────────
+  // This APPENDS a decoration — never removes existing ones.
+  const applyRange = useCallback((userId, startLine, startCol, endLine, endCol) => {
     const editor = editorRef.current;
     const monaco = monacoRef.current;
     if (!editor || !monaco) return;
-    if (!showUnderlinesRef.current) return;
-    // Don't decorate zero-length ranges (pure deletions)
-    if (startLine === endLine && startCol === endCol) return;
+    if (startLine === endLine && startCol === endCol) return; // zero-length = deletion
 
+    const uColor = userColorMap.current[userId];
+    if (!uColor) return; // no color registered yet — skip
     injectUserStyle(userId, uColor);
-    const safeId = userId.replace(/[^a-z0-9]/gi, '');
 
-    const newDec = {
+    const safeId = userId.replace(/[^a-z0-9]/gi, '');
+    const dec = {
       range: new monaco.Range(startLine, startCol, endLine, endCol),
       options: {
         inlineClassName: `typed-by-${safeId}`,
-        // Grow when the same user keeps typing right after this range
+        // Grow only when the same user keeps typing right after — important for own typing
         stickiness: monaco.editor.TrackedRangeStickiness.GrowsOnlyWhenTypingAfter
       }
     };
-    // Append (don't remove old ones)
-    const added = editor.deltaDecorations([], [newDec]);
-    typedDecorations.current[userId] = [
-      ...(typedDecorations.current[userId] || []),
-      ...added
-    ];
+    // Append: pass [] as "remove" so existing ones stay
+    const added = editor.deltaDecorations([], [dec]);
+    if (!decorationIds.current[userId]) decorationIds.current[userId] = [];
+    decorationIds.current[userId].push(...added);
   }, []);
 
-  // ── Toggle underlines on/off ────────────────────────────────────────────────
-  const toggleUnderlines = useCallback((show) => {
-    const editor = editorRef.current;
-    if (!editor) return;
+  // ── Bulk-apply an array of range objects (used for history on join) ────────
+  const applyRanges = useCallback((rangeList) => {
+    // Group by userId so we can batch by user
+    const byUser = {};
+    rangeList.forEach(r => {
+      if (!byUser[r.userId]) byUser[r.userId] = [];
+      byUser[r.userId].push(r);
+    });
 
-    if (!show) {
-      // Remove all typed decorations visually (keep IDs so we can restore later? 
-      // Simpler: just clear. They re-accumulate as people keep typing.)
-      const allIds = Object.values(typedDecorations.current).flat();
-      editor.deltaDecorations(allIds, []);
-      typedDecorations.current = {};
-    }
+    Object.entries(byUser).forEach(([userId, ranges]) => {
+      const uColor = userColorMap.current[userId];
+      if (!uColor) return;
+      injectUserStyle(userId, uColor);
+      const safeId = userId.replace(/[^a-z0-9]/gi, '');
+      const editor = editorRef.current;
+      const monaco = monacoRef.current;
+      if (!editor || !monaco) return;
+
+      const decs = ranges
+        .filter(r => !(r.startLine === r.endLine && r.startCol === r.endCol))
+        .map(r => ({
+          range: new monaco.Range(r.startLine, r.startCol, r.endLine, r.endCol),
+          options: {
+            inlineClassName: `typed-by-${safeId}`,
+            stickiness: monaco.editor.TrackedRangeStickiness.GrowsOnlyWhenTypingAfter
+          }
+        }));
+
+      if (decs.length === 0) return;
+      const added = editor.deltaDecorations([], decs);
+      if (!decorationIds.current[userId]) decorationIds.current[userId] = [];
+      decorationIds.current[userId].push(...added);
+    });
+  }, []);
+
+  // ── Toggle handler ─────────────────────────────────────────────────────────
+  // KEY INSIGHT: we never remove Monaco decorations on toggle.
+  // Monaco keeps tracking their positions through all edits.
+  // We just inject/remove a CSS rule that sets border-bottom: none.
+  const handleToggleUnderlines = useCallback((show) => {
     setShowUnderlines(show);
+    if (show) showUnderlinesCSS();
+    else hideUnderlinesCSS();
   }, []);
 
-  // ── Apply remote delta changes via executeEdits ─────────────────────────────
+  // ── Apply remote delta changes ─────────────────────────────────────────────
   const applyRemoteChanges = useCallback((changes, userId) => {
     const editor = editorRef.current;
     const monaco = monacoRef.current;
     if (!editor || !monaco) return;
 
-    const user = usersRef.current.find(u => u.id === userId);
-    const uColor = user?.color || '#ffffff';
-
-    // Build edits array for Monaco
     const edits = changes.map(c => ({
       range: new monaco.Range(
         c.range.startLineNumber, c.range.startColumn,
@@ -168,34 +201,30 @@ export default function EditorScreen({ socket, session, onLeave }) {
     editor.executeEdits('remote', edits);
     isRemoteChange.current = false;
 
-    // Add underline decorations for each insertion
-    if (showUnderlinesRef.current) {
-      changes.forEach(c => {
-        if (!c.text || c.text.length === 0) return;
-        const { endLine, endCol } = calcInsertedRange(
-          c.range.startLineNumber, c.range.startColumn, c.text
-        );
-        addTypedDecoration(userId, uColor, c.range.startLineNumber, c.range.startColumn, endLine, endCol);
-      });
-    }
-  }, [addTypedDecoration]);
+    // Decorate what they inserted
+    changes.forEach(c => {
+      if (!c.text || c.text.length === 0) return;
+      const { endLine, endCol } = calcInsertEnd(
+        c.range.startLineNumber, c.range.startColumn, c.text
+      );
+      applyRange(userId, c.range.startLineNumber, c.range.startColumn, endLine, endCol);
+    });
+  }, [applyRange]);
 
-  // ── Main socket effect ──────────────────────────────────────────────────────
+  // ── Socket setup ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return;
 
     const doJoin = () => {
-      const pending = socket._pendingJoin;
-      if (pending) {
-        socket.emit('join-room', pending);
-        socket._pendingJoin = null;
-      }
+      const p = socket._pendingJoin;
+      if (p) { socket.emit('join-room', p); socket._pendingJoin = null; }
     };
 
     const onConnect = () => {
       setConnected(true);
       setSelfId(socket.id);
       selfIdRef.current = socket.id;
+      registerColor(socket.id, color);
       setStatus(`Room: ${roomId}`);
       doJoin();
     };
@@ -205,25 +234,31 @@ export default function EditorScreen({ socket, session, onLeave }) {
       setStatus('Disconnected — reconnecting...');
     };
 
-    const onRoomState = ({ code: roomCode, language: roomLang, users: roomUsers }) => {
+    const onRoomState = ({ code: roomCode, language: roomLang, users: roomUsers, typedRanges }) => {
       const editor = editorRef.current;
       const startCode = initialCode || roomCode || LANGUAGES[roomLang]?.starter || '';
-
       if (editor) {
         isRemoteChange.current = true;
         editor.setValue(startCode);
         isRemoteChange.current = false;
       }
-
       setLanguage(roomLang);
       setSelfId(socket.id);
       selfIdRef.current = socket.id;
       setConnected(true);
       setStatus(`Room: ${roomId}`);
 
+      // Register ALL users' colors first so applyRanges can find them
+      registerColor(socket.id, color);
       const others = roomUsers.filter(u => u.id !== socket.id);
+      others.forEach(u => registerColor(u.id, u.color));
       setUsers(others);
-      others.forEach(u => injectUserStyle(u.id, u.color));
+
+      // Apply historical typed ranges received from server
+      // Small delay so editor has fully rendered the code first
+      if (typedRanges && typedRanges.length > 0) {
+        setTimeout(() => applyRanges(typedRanges), 300);
+      }
 
       if (initialCode) {
         setTimeout(() => socket.emit('code-change', { code: initialCode }), 200);
@@ -231,27 +266,25 @@ export default function EditorScreen({ socket, session, onLeave }) {
     };
 
     const onUserJoined = (user) => {
+      registerColor(user.id, user.color);
       setUsers(prev => prev.find(u => u.id === user.id) ? prev : [...prev, user]);
-      injectUserStyle(user.id, user.color);
       setStatus(`${user.name} joined`);
       setTimeout(() => setStatus(`Room: ${roomId}`), 2000);
     };
 
     const onUserLeft = ({ id }) => {
-      const leaving = usersRef.current.find(u => u.id === id);
-      setUsers(prev => prev.filter(u => u.id !== id));
-      if (leaving) {
-        setStatus(`${leaving.name} left`);
-        setTimeout(() => setStatus(`Room: ${roomId}`), 2000);
-      }
+      setUsers(prev => {
+        const leaving = prev.find(u => u.id === id);
+        if (leaving) {
+          setStatus(`${leaving.name} left`);
+          setTimeout(() => setStatus(`Room: ${roomId}`), 2000);
+        }
+        return prev.filter(u => u.id !== id);
+      });
     };
 
-    // Delta-based sync
-    const onContentChange = ({ changes, userId }) => {
-      applyRemoteChanges(changes, userId);
-    };
+    const onContentChange = ({ changes, userId }) => applyRemoteChanges(changes, userId);
 
-    // Full-code sync (fallback for initial upload)
     const onCodeChange = ({ code: newCode }) => {
       const editor = editorRef.current;
       if (editor) {
@@ -261,66 +294,55 @@ export default function EditorScreen({ socket, session, onLeave }) {
       }
     };
 
-    const onLanguageChange = ({ language: newLang }) => {
-      setLanguage(newLang);
-    };
+    const onLanguageChange = ({ language: newLang }) => setLanguage(newLang);
 
-    socket.on('connect',        onConnect);
-    socket.on('disconnect',     onDisconnect);
-    socket.on('room-state',     onRoomState);
-    socket.on('user-joined',    onUserJoined);
-    socket.on('user-left',      onUserLeft);
-    socket.on('content-change', onContentChange);
-    socket.on('code-change',    onCodeChange);
-    socket.on('language-change',onLanguageChange);
+    socket.on('connect',         onConnect);
+    socket.on('disconnect',      onDisconnect);
+    socket.on('room-state',      onRoomState);
+    socket.on('user-joined',     onUserJoined);
+    socket.on('user-left',       onUserLeft);
+    socket.on('content-change',  onContentChange);
+    socket.on('code-change',     onCodeChange);
+    socket.on('language-change', onLanguageChange);
 
     if (socket.connected) onConnect();
     else socket.connect();
 
     return () => {
-      socket.off('connect',        onConnect);
-      socket.off('disconnect',     onDisconnect);
-      socket.off('room-state',     onRoomState);
-      socket.off('user-joined',    onUserJoined);
-      socket.off('user-left',      onUserLeft);
-      socket.off('content-change', onContentChange);
-      socket.off('code-change',    onCodeChange);
-      socket.off('language-change',onLanguageChange);
+      socket.off('connect',         onConnect);
+      socket.off('disconnect',      onDisconnect);
+      socket.off('room-state',      onRoomState);
+      socket.off('user-joined',     onUserJoined);
+      socket.off('user-left',       onUserLeft);
+      socket.off('content-change',  onContentChange);
+      socket.off('code-change',     onCodeChange);
+      socket.off('language-change', onLanguageChange);
     };
-  }, [socket, roomId, initialCode, applyRemoteChanges]);
+  }, [socket, roomId, color, initialCode, registerColor, applyRanges, applyRemoteChanges]);
 
-  // ── Editor mount ────────────────────────────────────────────────────────────
+  // ── Editor mount ───────────────────────────────────────────────────────────
   const handleEditorMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
     monaco.editor.defineTheme('collabDark', MONACO_THEME);
     monaco.editor.setTheme('collabDark');
 
-    // Listen to content changes at the model level (fires for every keystroke)
     editor.onDidChangeModelContent((e) => {
-      // Skip if this change was applied by us from a remote event
       if (isRemoteChange.current) return;
 
       const changes = e.changes;
-      const fullCode = editor.getValue();
+      socket?.emit('content-change', { changes, fullCode: editor.getValue() });
 
-      // Emit delta to server
-      socket?.emit('content-change', { changes, fullCode });
-
-      // Add underline decoration for own typed text
-      if (showUnderlinesRef.current && selfIdRef.current) {
-        changes.forEach(c => {
-          if (!c.text || c.text.length === 0) return;
-          const { endLine, endCol } = calcInsertedRange(
-            c.range.startLineNumber, c.range.startColumn, c.text
-          );
-          addTypedDecoration(
-            selfIdRef.current, color,
-            c.range.startLineNumber, c.range.startColumn,
-            endLine, endCol
-          );
-        });
-      }
+      // Decorate own typing
+      const myId = selfIdRef.current;
+      if (!myId) return;
+      changes.forEach(c => {
+        if (!c.text || c.text.length === 0) return;
+        const { endLine, endCol } = calcInsertEnd(
+          c.range.startLineNumber, c.range.startColumn, c.text
+        );
+        applyRange(myId, c.range.startLineNumber, c.range.startColumn, endLine, endCol);
+      });
     });
   };
 
@@ -360,7 +382,7 @@ export default function EditorScreen({ socket, session, onLeave }) {
       if (parts.length === 0 && statusDesc !== 'Accepted') parts.push(`Status: ${statusDesc}`);
       setOutput(parts.join('\n').trim() || '(no output)');
     } catch (e) {
-      setOutput(`❌ Error: ${e.message}\n\nJudge0 CE is a free public API — it may occasionally be rate-limited. Try again.`);
+      setOutput(`❌ Error: ${e.message}\n\nJudge0 CE is a free public API — may occasionally be rate-limited.`);
     }
     setRunning(false);
   };
@@ -384,6 +406,7 @@ export default function EditorScreen({ socket, session, onLeave }) {
 
   const handleLeave = () => {
     if (window.confirm('Download your code before leaving?')) downloadCode();
+    showUnderlinesCSS(); // clean up hide style if active
     onLeave();
   };
 
@@ -395,7 +418,6 @@ export default function EditorScreen({ socket, session, onLeave }) {
   return (
     <div className={styles.root}>
       <header className={styles.topBar}>
-        {/* Left */}
         <div className={styles.topLeft}>
           <span className={styles.brand}>{'</>'} CollabCode</span>
           <button className={styles.roomBadge} onClick={copyRoomId} title="Click to copy room ID">
@@ -406,7 +428,6 @@ export default function EditorScreen({ socket, session, onLeave }) {
           <span className={styles.statusText}>{status}</span>
         </div>
 
-        {/* Center — language tabs */}
         <div className={styles.topCenter}>
           {['python', 'java', 'cpp'].map(lang => (
             <button
@@ -420,9 +441,7 @@ export default function EditorScreen({ socket, session, onLeave }) {
           ))}
         </div>
 
-        {/* Right */}
         <div className={styles.topRight}>
-          {/* User avatars */}
           <div className={styles.userList}>
             {allUsers.slice(0, 6).map(u => (
               <div key={u.id} className={styles.userAvatar} style={{ '--ucolor': u.color }} title={u.name}>
@@ -433,15 +452,25 @@ export default function EditorScreen({ socket, session, onLeave }) {
             {allUsers.length > 6 && <div className={styles.userMore}>+{allUsers.length - 6}</div>}
           </div>
 
-          {/* Underline toggle */}
+          {/* Color legend */}
+          {showUnderlines && (
+            <div className={styles.underlineLegend}>
+              {allUsers.slice(0, 4).map(u => (
+                <div key={u.id} className={styles.legendItem} title={u.name}>
+                  <span className={styles.legendLine} style={{ background: u.color }} />
+                  <span className={styles.legendName}>{u.name.replace(' (you)', '')}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Toggle */}
           <button
             className={`${styles.underlineToggle} ${showUnderlines ? styles.underlineToggleOn : styles.underlineToggleOff}`}
-            onClick={() => toggleUnderlines(!showUnderlines)}
+            onClick={() => handleToggleUnderlines(!showUnderlines)}
             title={showUnderlines ? 'Hide who-typed-what underlines' : 'Show who-typed-what underlines'}
           >
-            <span className={styles.underlineToggleIcon}>
-              {showUnderlines ? '▁' : '—'}
-            </span>
+            <span className={styles.underlineToggleIcon}>▁</span>
             <span className={styles.underlineToggleLabel}>
               {showUnderlines ? 'Underlines On' : 'Underlines Off'}
             </span>
@@ -451,8 +480,7 @@ export default function EditorScreen({ socket, session, onLeave }) {
 
           <button
             className={`${styles.runBtn} ${running ? styles.runBtnRunning : ''}`}
-            onClick={runCode}
-            disabled={running}
+            onClick={runCode} disabled={running}
           >
             {running ? <><span className={styles.runSpinner} />Running...</> : <>▶ Run</>}
           </button>
@@ -489,7 +517,6 @@ export default function EditorScreen({ socket, session, onLeave }) {
         />
       </div>
 
-      {/* Output panel */}
       <div className={`${styles.outputPanel} ${outputOpen ? styles.outputOpen : ''}`}>
         <div className={styles.outputHeader} onClick={() => setOutputOpen(v => !v)}>
           <div className={styles.outputTitle}>
