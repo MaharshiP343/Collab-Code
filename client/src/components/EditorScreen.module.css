@@ -1,7 +1,7 @@
 .root {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   background: var(--bg2);
   overflow: hidden;
 }
@@ -25,6 +25,7 @@
   align-items: center;
   gap: 0.5rem;
   flex-shrink: 0;
+  min-width: 0;
 }
 
 .brand {
@@ -88,9 +89,12 @@
 
 .topCenter {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 0.2rem;
   flex: 1;
   justify-content: center;
+  min-width: 0;
 }
 
 .langTab {
@@ -132,13 +136,17 @@
 .topRight {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.4rem;
   flex-shrink: 0;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .userList {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .userAvatar {
@@ -511,5 +519,197 @@
     max-width: 5.6rem;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+}
+
+@media (max-width: 980px) {
+  .topBar {
+    height: auto;
+    min-height: 52px;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding: 0.55rem 0.75rem;
+    overflow: visible;
+  }
+
+  .topLeft {
+    flex: 1 1 auto;
+  }
+
+  .topCenter {
+    order: 3;
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    padding-top: 0.3rem;
+  }
+
+  .topRight {
+    flex: 1 1 auto;
+    gap: 0.3rem;
+  }
+
+  .iconBtnLabel,
+  .underlineToggleLabel {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .topBar {
+    gap: 0.45rem;
+    padding: 0.5rem 0.6rem;
+  }
+
+  .topLeft,
+  .topRight {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .topRight {
+    gap: 0.35rem;
+  }
+
+  .brand {
+    font-size: 0.78rem;
+  }
+
+  .roomBadge {
+    padding: 0.25rem 0.45rem;
+    font-size: 0.68rem;
+  }
+
+  .copyHint {
+    display: none;
+  }
+
+  .langTab {
+    padding: 0.28rem 0.48rem;
+    font-size: 0.74rem;
+  }
+
+  .langLabel {
+    display: inline;
+    font-size: 0.72rem;
+  }
+
+  .userList {
+    order: 4;
+  }
+
+  .runBtn,
+  .leaveBtn,
+  .iconBtn,
+  .underlineToggle {
+    min-height: 34px;
+  }
+
+  .runBtn {
+    padding: 0.36rem 0.65rem;
+    font-size: 0.76rem;
+  }
+
+  .leaveBtn,
+  .iconBtn,
+  .underlineToggle {
+    padding: 0.28rem 0.48rem;
+    font-size: 0.72rem;
+  }
+
+  .outputPanel {
+    max-height: 38vh;
+  }
+
+  .outputHeader {
+    padding: 0 0.75rem;
+  }
+
+  .outputContent {
+    padding: 0.7rem 0.75rem;
+    font-size: 0.78rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .topLeft {
+    gap: 0.4rem;
+  }
+
+  .brand {
+    max-width: 7.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .roomBadge {
+    min-width: 0;
+  }
+
+  .roomId {
+    max-width: 4.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topCenter {
+    gap: 0.35rem;
+  }
+
+  .langTab {
+    flex: 1 1 calc(33.333% - 0.24rem);
+    justify-content: center;
+  }
+
+  .langLabel {
+    display: none;
+  }
+
+  .topRight {
+    justify-content: flex-start;
+  }
+
+  .userList {
+    width: 100%;
+    margin-bottom: 0.15rem;
+  }
+
+  .underlineToggle,
+  .iconBtn,
+  .leaveBtn {
+    flex: 0 0 auto;
+  }
+
+  .runBtn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .topBar {
+    padding: 0.45rem 0.5rem;
+  }
+
+  .brand {
+    max-width: 6.4rem;
+    font-size: 0.74rem;
+  }
+
+  .userAvatar,
+  .userMore {
+    width: 24px;
+    height: 24px;
+  }
+
+  .runBtn,
+  .leaveBtn,
+  .iconBtn,
+  .underlineToggle {
+    font-size: 0.7rem;
+  }
+
+  .editorWrapper {
+    min-height: 280px;
   }
 }

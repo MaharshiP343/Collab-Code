@@ -1,5 +1,5 @@
 .container {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -80,6 +80,7 @@
 
 .langBadges {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 1rem;
 }
@@ -259,6 +260,7 @@
 .uploadedFile {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
   justify-content: center;
   color: var(--accent);
@@ -333,4 +335,129 @@
   inset: 0;
   background: linear-gradient(135deg, transparent 30%, rgba(255,255,255,0.2));
   pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .container {
+    padding: 1rem 0.85rem;
+  }
+
+  .card {
+    padding: 1.25rem;
+    border-radius: 14px;
+  }
+
+  .logo {
+    gap: 0.75rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .logoIcon {
+    font-size: 1.45rem;
+    padding: 0.35rem 0.58rem;
+  }
+
+  .logoTitle {
+    font-size: 1.35rem;
+  }
+
+  .logoSub {
+    font-size: 0.76rem;
+  }
+
+  .form {
+    gap: 0.9rem;
+  }
+
+  .input,
+  .genBtn {
+    padding: 0.72rem 0.9rem;
+  }
+
+  .dropzone {
+    padding: 1rem 0.85rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .container {
+    padding: 0.8rem 0.7rem;
+  }
+
+  .card {
+    padding: 1rem;
+    border-radius: 12px;
+  }
+
+  .logo {
+    align-items: flex-start;
+  }
+
+  .logoTitle {
+    font-size: 1.2rem;
+  }
+
+  .langBadge {
+    font-size: 0.68rem;
+    padding: 0.22rem 0.5rem;
+  }
+
+  .label {
+    font-size: 0.74rem;
+  }
+
+  .input {
+    font-size: 0.9rem;
+  }
+
+  .roomRow {
+    flex-direction: column;
+  }
+
+  .genBtn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .hint {
+    font-size: 0.72rem;
+  }
+
+  .colorGrid {
+    gap: 0.45rem;
+  }
+
+  .colorSwatch {
+    width: 26px;
+    height: 26px;
+  }
+
+  .uploadedFile {
+    font-size: 0.8rem;
+  }
+
+  .joinBtn {
+    width: 100%;
+    padding: 0.82rem 1.2rem;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .card {
+    padding: 0.9rem;
+  }
+
+  .logo {
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  .logoIcon {
+    align-self: flex-start;
+  }
+
+  .dropFormats {
+    font-size: 0.68rem;
+  }
 }
