@@ -163,8 +163,9 @@ io.on('connection', (socket) => {
     const room = rooms.get(socket.roomId);
     if (!room) return;
     room.code = code;
-    // Reset authorship — uploaded file, attribute all to uploader
-    room.authorRuns = code.length > 0 ? [{ userId: socket.id, len: code.length }] : [];
+    // Reset authorship for seeded code. Boilerplate/uploaded content starts neutral,
+    // and only later real typing claims ownership from the exact edit position onward.
+    room.authorRuns = code.length > 0 ? [{ userId: null, len: code.length }] : [];
     socket.to(socket.roomId).emit('code-change', { code });
     emitAuthorship(socket.roomId, room);
   });
