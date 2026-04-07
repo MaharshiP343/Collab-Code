@@ -10,18 +10,21 @@ const io = new Server(server, {
 });
 
 const rooms = new Map();
+const DEFAULT_STARTER_CODE = '# Welcome to CollabCode!\n\nprint("Hello, World!")\n';
 
 function getRoom(roomId) {
   if (!rooms.has(roomId)) {
     rooms.set(roomId, {
-      code: '',
+      code: DEFAULT_STARTER_CODE,
       language: 'python',
       users: new Map(),
       // Authorship: parallel array to code chars. authorMap[i] = userId who typed char i
       // We store as a string of fixed-width tokens for simplicity:
       // Actually store as array of {userId} per character — but that's huge.
       // Better: store as runs: [{userId, length}] — run-length encoding
-      authorRuns: []  // [{userId, len}]  covers entire code length
+      authorRuns: DEFAULT_STARTER_CODE.length > 0
+        ? [{ userId: null, len: DEFAULT_STARTER_CODE.length }]
+        : []  // [{userId, len}]  covers entire code length
     });
   }
   return rooms.get(roomId);
