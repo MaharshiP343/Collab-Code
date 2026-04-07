@@ -35,13 +35,20 @@ io.on('connection', (socket) => {
     console.log(`[room:${roomId}] ${name} joined (${room.users.size} total)`);
   });
 
+  // Delta-based sync: receive only the changed ranges, not full code
+  socket.on('content-change', ({ changes, fullCode }) => {
+    const room = rooms.get(socket.roomId);
+    if (!room) return;
+    room.code = fullCode; // keep full code for new joiners
+    socket.to(socket.roomId).emit('content-change', { changes, userId: socket.id });
+  });
+
+  // Fallback full-code sync (used on join with uploaded file)
   socket.on('code-change', ({ code, selections }) => {
     const room = rooms.get(socket.roomId);
     if (!room) return;
     room.code = code;
-    const user = room.users.get(socket.id);
-    if (user && selections) user.selections = selections;
-    socket.to(socket.roomId).emit('code-change', { code, userId: socket.id, selections: selections || [] });
+    socket.to(socket.roomId).emit('code-change', { code, userId: socket.id });
   });
 
   socket.on('language-change', ({ language }) => {

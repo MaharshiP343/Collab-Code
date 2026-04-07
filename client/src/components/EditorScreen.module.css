@@ -364,3 +364,48 @@
 }
 
 .outputPlaceholder { color: var(--text3); font-style: italic; }
+
+/* ─── Underline Toggle ─────────────────────────────────────── */
+.underlineToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.75rem;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.underlineToggleOn {
+  border-color: var(--accent-glow);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.underlineToggleOff {
+  border-color: var(--border);
+  color: var(--text3);
+}
+
+.underlineToggleOff:hover {
+  border-color: var(--border2);
+  color: var(--text2);
+}
+
+.underlineToggleIcon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.underlineToggleLabel {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  .underlineToggleLabel { display: inline; }
+}

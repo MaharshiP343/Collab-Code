@@ -71,4 +71,4 @@ Runs on port 3001.
 
 - AI chat assistant in the sidebar
 - AI debugging when code fails to compile
-- Code completion
+- Auto-Code completion
