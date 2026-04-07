@@ -3,31 +3,22 @@ import Editor from '@monaco-editor/react';
 import styles from './EditorScreen.module.css';
 
 const LANGUAGES = {
-  python: {
-    label: 'Python', icon: '🐍', monacoLang: 'python',
-    judge0Id: 71, ext: 'py',
-    starter: '# Welcome to CollabCode!\n\nprint("Hello, World!")\n'
-  },
-  java: {
-    label: 'Java', icon: '☕', monacoLang: 'java',
-    judge0Id: 62, ext: 'java',
-    starter: 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}\n'
-  },
-  cpp: {
-    label: 'C++', icon: '⚡', monacoLang: 'cpp',
-    judge0Id: 54, ext: 'cpp',
-    starter: '#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello, World!" << endl;\n    return 0;\n}\n'
-  }
+  python: { label: 'Python', icon: '🐍', monacoLang: 'python', judge0Id: 71, ext: 'py',
+    starter: '# Welcome to CollabCode!\n\nprint("Hello, World!")\n' },
+  java:   { label: 'Java',   icon: '☕', monacoLang: 'java',   judge0Id: 62, ext: 'java',
+    starter: 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}\n' },
+  cpp:    { label: 'C++',    icon: '⚡', monacoLang: 'cpp',    judge0Id: 54, ext: 'cpp',
+    starter: '#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello, World!" << endl;\n    return 0;\n}\n' },
 };
 
 const MONACO_THEME = {
   base: 'vs-dark', inherit: true,
   rules: [
-    { token: 'comment', foreground: '484f58', fontStyle: 'italic' },
-    { token: 'keyword', foreground: '7c6af7' },
-    { token: 'string', foreground: '00e5a0' },
-    { token: 'number', foreground: 'ffd93d' },
-    { token: 'type', foreground: '74b9ff' },
+    { token: 'comment',  foreground: '484f58', fontStyle: 'italic' },
+    { token: 'keyword',  foreground: '7c6af7' },
+    { token: 'string',   foreground: '00e5a0' },
+    { token: 'number',   foreground: 'ffd93d' },
+    { token: 'type',     foreground: '74b9ff' },
   ],
   colors: {
     'editor.background': '#0d1117', 'editor.foreground': '#e6edf3',
@@ -41,149 +32,106 @@ const MONACO_THEME = {
   }
 };
 
-// ── CSS helpers ──────────────────────────────────────────────────────────────
-
-// Inject per-user underline color class (idempotent)
+// ── CSS helpers ───────────────────────────────────────────────────────────────
 function injectUserStyle(userId, color) {
   const safeId = userId.replace(/[^a-z0-9]/gi, '');
-  const id = `collab-style-${safeId}`;
+  const id = `cs-${safeId}`;
   if (document.getElementById(id)) return;
   const s = document.createElement('style');
   s.id = id;
-  s.textContent = `.typed-by-${safeId} { border-bottom: 2.5px solid ${color} !important; padding-bottom: 1px; }`;
+  s.textContent = `.tb-${safeId}{border-bottom:2.5px solid ${color}!important;padding-bottom:1px}`;
   document.head.appendChild(s);
 }
 
-// Hide ALL underlines via a single override rule (decorations stay alive in Monaco)
-function hideUnderlinesCSS() {
-  if (document.getElementById('collab-underlines-hidden')) return;
-  const s = document.createElement('style');
-  s.id = 'collab-underlines-hidden';
-  s.textContent = `[class*="typed-by-"] { border-bottom: none !important; }`;
-  document.head.appendChild(s);
-}
+const HIDE_ID = 'collab-underlines-hidden';
+const setUnderlinesVisible = (visible) => {
+  if (!visible) {
+    if (!document.getElementById(HIDE_ID)) {
+      const s = document.createElement('style');
+      s.id = HIDE_ID;
+      s.textContent = `[class^="tb-"],[class*=" tb-"]{border-bottom:none!important}`;
+      document.head.appendChild(s);
+    }
+  } else {
+    document.getElementById(HIDE_ID)?.remove();
+  }
+};
 
-// Remove the override — underlines reappear at Monaco's tracked positions
-function showUnderlinesCSS() {
-  document.getElementById('collab-underlines-hidden')?.remove();
-}
-
-// Calculate where inserted text ends
-function calcInsertEnd(startLine, startCol, text) {
-  const lines = text.split('\n');
-  if (lines.length === 1) return { endLine: startLine, endCol: startCol + text.length };
-  return { endLine: startLine + lines.length - 1, endCol: lines[lines.length - 1].length + 1 };
-}
-
-// ── Component ────────────────────────────────────────────────────────────────
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function EditorScreen({ socket, session, onLeave }) {
   const { name, roomId, color, initialCode } = session;
 
-  const [language, setLanguage]             = useState('python');
-  const [users, setUsers]                   = useState([]);
-  const [output, setOutput]                 = useState('');
-  const [running, setRunning]               = useState(false);
-  const [outputOpen, setOutputOpen]         = useState(false);
-  const [copied, setCopied]                 = useState(false);
-  const [connected, setConnected]           = useState(false);
-  const [selfId, setSelfId]                 = useState(null);
-  const [status, setStatus]                 = useState('Connecting...');
-  const [showUnderlines, setShowUnderlines] = useState(true);
+  const [language,        setLanguage]        = useState('python');
+  const [users,           setUsers]           = useState([]);
+  const [output,          setOutput]          = useState('');
+  const [running,         setRunning]         = useState(false);
+  const [outputOpen,      setOutputOpen]      = useState(false);
+  const [copied,          setCopied]          = useState(false);
+  const [connected,       setConnected]       = useState(false);
+  const [selfId,          setSelfId]          = useState(null);
+  const [status,          setStatus]          = useState('Connecting...');
+  const [showUnderlines,  setShowUnderlines]  = useState(true);
+  const [joinError,       setJoinError]       = useState('');
 
   const editorRef      = useRef(null);
   const monacoRef      = useRef(null);
-  const isRemoteChange = useRef(false);
+  const isRemote       = useRef(false);
   const selfIdRef      = useRef(null);
+  const userColorMap   = useRef({});            // userId → color
+  // Active Monaco decoration IDs per user — NEVER cleared except on editor reset
+  const decIds         = useRef({});            // userId → [id,...]
 
-  // userId → color  (never cleared, populated as we meet users)
-  const userColorMap = useRef({});
-
-  // userId → [Monaco decoration IDs]
-  // Decorations are ALWAYS kept alive so Monaco tracks their positions.
-  // We just CSS-hide them when the toggle is off.
-  const decorationIds = useRef({});
-
-  // ── Register user color ────────────────────────────────────────────────────
+  // ── Inject color CSS for a user ───────────────────────────────────────────
   const registerColor = useCallback((userId, uColor) => {
-    if (userColorMap.current[userId]) return; // already registered
+    if (userColorMap.current[userId] === uColor) return;
     userColorMap.current[userId] = uColor;
     injectUserStyle(userId, uColor);
   }, []);
 
-  // ── Apply one decoration range for a user ─────────────────────────────────
-  // This APPENDS a decoration — never removes existing ones.
-  const applyRange = useCallback((userId, startLine, startCol, endLine, endCol) => {
+  // ── Core: replace all decorations for a user with fresh ranges from server ─
+  // This is the ONLY place decorations are written.
+  const applyUserDecorations = useCallback((userId, ranges) => {
     const editor = editorRef.current;
     const monaco = monacoRef.current;
     if (!editor || !monaco) return;
-    if (startLine === endLine && startCol === endCol) return; // zero-length = deletion
 
     const uColor = userColorMap.current[userId];
-    if (!uColor) return; // no color registered yet — skip
-    injectUserStyle(userId, uColor);
+    if (!uColor) return;
 
     const safeId = userId.replace(/[^a-z0-9]/gi, '');
-    const dec = {
-      range: new monaco.Range(startLine, startCol, endLine, endCol),
+    const decs = (ranges || []).map(r => ({
+      range: new monaco.Range(r.startLine, r.startCol, r.endLine, r.endCol),
       options: {
-        inlineClassName: `typed-by-${safeId}`,
-        // Grow only when the same user keeps typing right after — important for own typing
-        stickiness: monaco.editor.TrackedRangeStickiness.GrowsOnlyWhenTypingAfter
+        inlineClassName: `tb-${safeId}`,
+        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
       }
-    };
-    // Append: pass [] as "remove" so existing ones stay
-    const added = editor.deltaDecorations([], [dec]);
-    if (!decorationIds.current[userId]) decorationIds.current[userId] = [];
-    decorationIds.current[userId].push(...added);
+    }));
+
+    // Replace this user's decorations entirely with the server-computed set
+    const oldIds = decIds.current[userId] || [];
+    decIds.current[userId] = editor.deltaDecorations(oldIds, decs);
   }, []);
 
-  // ── Bulk-apply an array of range objects (used for history on join) ────────
-  const applyRanges = useCallback((rangeList) => {
-    // Group by userId so we can batch by user
-    const byUser = {};
-    rangeList.forEach(r => {
-      if (!byUser[r.userId]) byUser[r.userId] = [];
-      byUser[r.userId].push(r);
+  // Apply a full decoration map (userId → ranges[]) — used on join & full resets
+  const applyDecorationMap = useCallback((decorationMap) => {
+    if (!decorationMap) return;
+    Object.entries(decorationMap).forEach(([userId, ranges]) => {
+      if (userColorMap.current[userId]) {
+        applyUserDecorations(userId, ranges);
+      }
     });
+  }, [applyUserDecorations]);
 
-    Object.entries(byUser).forEach(([userId, ranges]) => {
-      const uColor = userColorMap.current[userId];
-      if (!uColor) return;
-      injectUserStyle(userId, uColor);
-      const safeId = userId.replace(/[^a-z0-9]/gi, '');
-      const editor = editorRef.current;
-      const monaco = monacoRef.current;
-      if (!editor || !monaco) return;
-
-      const decs = ranges
-        .filter(r => !(r.startLine === r.endLine && r.startCol === r.endCol))
-        .map(r => ({
-          range: new monaco.Range(r.startLine, r.startCol, r.endLine, r.endCol),
-          options: {
-            inlineClassName: `typed-by-${safeId}`,
-            stickiness: monaco.editor.TrackedRangeStickiness.GrowsOnlyWhenTypingAfter
-          }
-        }));
-
-      if (decs.length === 0) return;
-      const added = editor.deltaDecorations([], decs);
-      if (!decorationIds.current[userId]) decorationIds.current[userId] = [];
-      decorationIds.current[userId].push(...added);
-    });
-  }, []);
-
-  // ── Toggle handler ─────────────────────────────────────────────────────────
-  // KEY INSIGHT: we never remove Monaco decorations on toggle.
-  // Monaco keeps tracking their positions through all edits.
-  // We just inject/remove a CSS rule that sets border-bottom: none.
-  const handleToggleUnderlines = useCallback((show) => {
+  // ── Toggle ────────────────────────────────────────────────────────────────
+  const handleToggle = useCallback((show) => {
     setShowUnderlines(show);
-    if (show) showUnderlinesCSS();
-    else hideUnderlinesCSS();
+    setUnderlinesVisible(show);
+    // No decoration data is lost — Monaco keeps tracking positions
+    // CSS hide/show is all we need
   }, []);
 
-  // ── Apply remote delta changes ─────────────────────────────────────────────
-  const applyRemoteChanges = useCallback((changes, userId) => {
+  // ── Remote content change ─────────────────────────────────────────────────
+  const applyRemoteChanges = useCallback((changes, userId, userRanges) => {
     const editor = editorRef.current;
     const monaco = monacoRef.current;
     if (!editor || !monaco) return;
@@ -197,21 +145,18 @@ export default function EditorScreen({ socket, session, onLeave }) {
       forceMoveMarkers: true
     }));
 
-    isRemoteChange.current = true;
+    isRemote.current = true;
     editor.executeEdits('remote', edits);
-    isRemoteChange.current = false;
+    isRemote.current = false;
 
-    // Decorate what they inserted
-    changes.forEach(c => {
-      if (!c.text || c.text.length === 0) return;
-      const { endLine, endCol } = calcInsertEnd(
-        c.range.startLineNumber, c.range.startColumn, c.text
-      );
-      applyRange(userId, c.range.startLineNumber, c.range.startColumn, endLine, endCol);
-    });
-  }, [applyRange]);
+    // Server sends back the definitive ranges for the user who just typed
+    // Replace their decorations with the server-authoritative version
+    if (userRanges) {
+      applyUserDecorations(userId, userRanges);
+    }
+  }, [applyUserDecorations]);
 
-  // ── Socket setup ───────────────────────────────────────────────────────────
+  // ── Socket setup ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return;
 
@@ -234,13 +179,17 @@ export default function EditorScreen({ socket, session, onLeave }) {
       setStatus('Disconnected — reconnecting...');
     };
 
-    const onRoomState = ({ code: roomCode, language: roomLang, users: roomUsers, typedRanges }) => {
+    const onJoinError = ({ message }) => {
+      setJoinError(message);
+    };
+
+    const onRoomState = ({ code: roomCode, language: roomLang, users: roomUsers, decorationMap }) => {
       const editor = editorRef.current;
       const startCode = initialCode || roomCode || LANGUAGES[roomLang]?.starter || '';
       if (editor) {
-        isRemoteChange.current = true;
+        isRemote.current = true;
         editor.setValue(startCode);
-        isRemoteChange.current = false;
+        isRemote.current = false;
       }
       setLanguage(roomLang);
       setSelfId(socket.id);
@@ -248,17 +197,14 @@ export default function EditorScreen({ socket, session, onLeave }) {
       setConnected(true);
       setStatus(`Room: ${roomId}`);
 
-      // Register ALL users' colors first so applyRanges can find them
+      // Register all users' colors before applying decorations
       registerColor(socket.id, color);
       const others = roomUsers.filter(u => u.id !== socket.id);
       others.forEach(u => registerColor(u.id, u.color));
       setUsers(others);
 
-      // Apply historical typed ranges received from server
-      // Small delay so editor has fully rendered the code first
-      if (typedRanges && typedRanges.length > 0) {
-        setTimeout(() => applyRanges(typedRanges), 300);
-      }
+      // Apply server-computed decoration map after editor settles
+      setTimeout(() => applyDecorationMap(decorationMap), 300);
 
       if (initialCode) {
         setTimeout(() => socket.emit('code-change', { code: initialCode }), 200);
@@ -281,29 +227,44 @@ export default function EditorScreen({ socket, session, onLeave }) {
         }
         return prev.filter(u => u.id !== id);
       });
+      // Remove their decorations
+      const editor = editorRef.current;
+      if (editor) {
+        const oldIds = decIds.current[id] || [];
+        editor.deltaDecorations(oldIds, []);
+        delete decIds.current[id];
+      }
     };
 
-    const onContentChange = ({ changes, userId }) => applyRemoteChanges(changes, userId);
+    const onContentChange = ({ changes, userId, userRanges }) => {
+      applyRemoteChanges(changes, userId, userRanges);
+    };
 
     const onCodeChange = ({ code: newCode }) => {
       const editor = editorRef.current;
       if (editor) {
-        isRemoteChange.current = true;
+        isRemote.current = true;
         editor.setValue(newCode);
-        isRemoteChange.current = false;
+        isRemote.current = false;
       }
+    };
+
+    const onDecorationMap = ({ decorationMap }) => {
+      setTimeout(() => applyDecorationMap(decorationMap), 100);
     };
 
     const onLanguageChange = ({ language: newLang }) => setLanguage(newLang);
 
-    socket.on('connect',         onConnect);
-    socket.on('disconnect',      onDisconnect);
-    socket.on('room-state',      onRoomState);
-    socket.on('user-joined',     onUserJoined);
-    socket.on('user-left',       onUserLeft);
-    socket.on('content-change',  onContentChange);
-    socket.on('code-change',     onCodeChange);
-    socket.on('language-change', onLanguageChange);
+    socket.on('connect',          onConnect);
+    socket.on('disconnect',       onDisconnect);
+    socket.on('join-error',       onJoinError);
+    socket.on('room-state',       onRoomState);
+    socket.on('user-joined',      onUserJoined);
+    socket.on('user-left',        onUserLeft);
+    socket.on('content-change',   onContentChange);
+    socket.on('code-change',      onCodeChange);
+    socket.on('decoration-map',   onDecorationMap);
+    socket.on('language-change',  onLanguageChange);
 
     if (socket.connected) onConnect();
     else socket.connect();
@@ -311,16 +272,18 @@ export default function EditorScreen({ socket, session, onLeave }) {
     return () => {
       socket.off('connect',         onConnect);
       socket.off('disconnect',      onDisconnect);
+      socket.off('join-error',      onJoinError);
       socket.off('room-state',      onRoomState);
       socket.off('user-joined',     onUserJoined);
       socket.off('user-left',       onUserLeft);
       socket.off('content-change',  onContentChange);
       socket.off('code-change',     onCodeChange);
+      socket.off('decoration-map',  onDecorationMap);
       socket.off('language-change', onLanguageChange);
     };
-  }, [socket, roomId, color, initialCode, registerColor, applyRanges, applyRemoteChanges]);
+  }, [socket, roomId, color, initialCode, registerColor, applyDecorationMap, applyRemoteChanges]);
 
-  // ── Editor mount ───────────────────────────────────────────────────────────
+  // ── Editor mount ──────────────────────────────────────────────────────────
   const handleEditorMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
@@ -328,20 +291,38 @@ export default function EditorScreen({ socket, session, onLeave }) {
     monaco.editor.setTheme('collabDark');
 
     editor.onDidChangeModelContent((e) => {
-      if (isRemoteChange.current) return;
-
+      if (isRemote.current) return;
       const changes = e.changes;
-      socket?.emit('content-change', { changes, fullCode: editor.getValue() });
-
-      // Decorate own typing
+      const fullCode = editor.getValue();
+      // Send delta to server — server computes updated ranges and sends back via content-change
+      socket?.emit('content-change', { changes, fullCode });
+      // Own decorations will come back via the content-change broadcast to others
+      // But we need to update our OWN decorations locally too.
+      // We'll receive it reflected back only if we also listen to our own emit.
+      // Simpler: compute approximate own ranges here for immediate feedback
+      // then server corrects via next join-state if needed.
+      // For now: track own typing directly
       const myId = selfIdRef.current;
       if (!myId) return;
       changes.forEach(c => {
-        if (!c.text || c.text.length === 0) return;
-        const { endLine, endCol } = calcInsertEnd(
-          c.range.startLineNumber, c.range.startColumn, c.text
-        );
-        applyRange(myId, c.range.startLineNumber, c.range.startColumn, endLine, endCol);
+        if (!c.text) return;
+        const lines = c.text.split('\n');
+        const endLine = c.range.startLineNumber + lines.length - 1;
+        const endCol  = lines.length === 1
+          ? c.range.startColumn + c.text.length
+          : lines[lines.length - 1].length + 1;
+        if (c.text.length === 0) return;
+        const safeId = myId.replace(/[^a-z0-9]/gi, '');
+        const dec = {
+          range: new monaco.Range(c.range.startLineNumber, c.range.startColumn, endLine, endCol),
+          options: {
+            inlineClassName: `tb-${safeId}`,
+            stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+          }
+        };
+        const added = editor.deltaDecorations([], [dec]);
+        if (!decIds.current[myId]) decIds.current[myId] = [];
+        decIds.current[myId].push(...added);
       });
     });
   };
@@ -351,9 +332,9 @@ export default function EditorScreen({ socket, session, onLeave }) {
     const editor = editorRef.current;
     if (editor && !editor.getValue()?.trim()) {
       const starter = LANGUAGES[lang]?.starter || '';
-      isRemoteChange.current = true;
+      isRemote.current = true;
       editor.setValue(starter);
-      isRemoteChange.current = false;
+      isRemote.current = false;
       socket?.emit('code-change', { code: starter });
     }
   };
@@ -361,8 +342,7 @@ export default function EditorScreen({ socket, session, onLeave }) {
   const getCurrentCode = () => editorRef.current?.getValue() || '';
 
   const runCode = async () => {
-    setRunning(true);
-    setOutputOpen(true);
+    setRunning(true); setOutputOpen(true);
     setOutput('⏳ Compiling & running...');
     const lang = LANGUAGES[language];
     try {
@@ -378,11 +358,11 @@ export default function EditorScreen({ socket, session, onLeave }) {
       if (data.stdout) parts.push(data.stdout);
       if (data.stderr) parts.push('stderr:\n' + data.stderr);
       if (data.message) parts.push(data.message);
-      const statusDesc = data.status?.description || '';
-      if (parts.length === 0 && statusDesc !== 'Accepted') parts.push(`Status: ${statusDesc}`);
+      const sd = data.status?.description || '';
+      if (!parts.length && sd !== 'Accepted') parts.push(`Status: ${sd}`);
       setOutput(parts.join('\n').trim() || '(no output)');
     } catch (e) {
-      setOutput(`❌ Error: ${e.message}\n\nJudge0 CE is a free public API — may occasionally be rate-limited.`);
+      setOutput(`❌ Error: ${e.message}`);
     }
     setRunning(false);
   };
@@ -406,7 +386,7 @@ export default function EditorScreen({ socket, session, onLeave }) {
 
   const handleLeave = () => {
     if (window.confirm('Download your code before leaving?')) downloadCode();
-    showUnderlinesCSS(); // clean up hide style if active
+    setUnderlinesVisible(true);
     onLeave();
   };
 
@@ -415,13 +395,25 @@ export default function EditorScreen({ socket, session, onLeave }) {
     ...users
   ];
 
+  if (joinError) {
+    return (
+      <div className={styles.errorScreen}>
+        <div className={styles.errorCard}>
+          <h2>⚠ Can't join room</h2>
+          <p>{joinError}</p>
+          <button onClick={onLeave} className={styles.backBtn}>← Go back</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.root}>
       <header className={styles.topBar}>
         <div className={styles.topLeft}>
           <span className={styles.brand}>{'</>'} CollabCode</span>
-          <button className={styles.roomBadge} onClick={copyRoomId} title="Click to copy room ID">
-            <span className={styles.roomDot} style={{ background: connected ? 'var(--accent)' : 'var(--red)' }} />
+          <button className={styles.roomBadge} onClick={copyRoomId}>
+            <span className={styles.roomDot} style={{ background: connected ? '#00e5a0' : '#ff5f57' }} />
             <span className={styles.roomId}>{roomId}</span>
             <span className={styles.copyHint}>{copied ? '✓' : 'copy'}</span>
           </button>
@@ -429,12 +421,10 @@ export default function EditorScreen({ socket, session, onLeave }) {
         </div>
 
         <div className={styles.topCenter}>
-          {['python', 'java', 'cpp'].map(lang => (
-            <button
-              key={lang}
+          {['python','java','cpp'].map(lang => (
+            <button key={lang}
               className={`${styles.langTab} ${language === lang ? styles.langTabActive : ''}`}
-              onClick={() => handleLanguageChange(lang)}
-            >
+              onClick={() => handleLanguageChange(lang)}>
               <span>{LANGUAGES[lang].icon}</span>
               <span className={styles.langLabel}>{LANGUAGES[lang].label}</span>
             </button>
@@ -442,21 +432,25 @@ export default function EditorScreen({ socket, session, onLeave }) {
         </div>
 
         <div className={styles.topRight}>
+          {/* Avatars */}
           <div className={styles.userList}>
             {allUsers.slice(0, 6).map(u => (
-              <div key={u.id} className={styles.userAvatar} style={{ '--ucolor': u.color }} title={u.name}>
+              <div key={u.id} className={styles.userAvatar} style={{ '--ucolor': u.color }}>
                 {u.name[0].toUpperCase()}
-                <span className={styles.userTooltip}>{u.name}</span>
+                <span className={styles.userTooltip}>
+                  {u.name}
+                  <span className={styles.tooltipColor} style={{ background: u.color }} />
+                </span>
               </div>
             ))}
             {allUsers.length > 6 && <div className={styles.userMore}>+{allUsers.length - 6}</div>}
           </div>
 
-          {/* Color legend */}
+          {/* Legend */}
           {showUnderlines && (
             <div className={styles.underlineLegend}>
               {allUsers.slice(0, 4).map(u => (
-                <div key={u.id} className={styles.legendItem} title={u.name}>
+                <div key={u.id} className={styles.legendItem}>
                   <span className={styles.legendLine} style={{ background: u.color }} />
                   <span className={styles.legendName}>{u.name.replace(' (you)', '')}</span>
                 </div>
@@ -466,52 +460,32 @@ export default function EditorScreen({ socket, session, onLeave }) {
 
           {/* Toggle */}
           <button
-            className={`${styles.underlineToggle} ${showUnderlines ? styles.underlineToggleOn : styles.underlineToggleOff}`}
-            onClick={() => handleToggleUnderlines(!showUnderlines)}
-            title={showUnderlines ? 'Hide who-typed-what underlines' : 'Show who-typed-what underlines'}
+            className={`${styles.underlineToggle} ${showUnderlines ? styles.ulOn : styles.ulOff}`}
+            onClick={() => handleToggle(!showUnderlines)}
+            title={showUnderlines ? 'Hide underlines' : 'Show underlines'}
           >
-            <span className={styles.underlineToggleIcon}>▁</span>
-            <span className={styles.underlineToggleLabel}>
-              {showUnderlines ? 'Underlines On' : 'Underlines Off'}
-            </span>
+            <span>▁</span>
+            <span className={styles.ulLabel}>{showUnderlines ? 'On' : 'Off'}</span>
           </button>
 
-          <button className={styles.iconBtn} onClick={downloadCode} title="Download code">⬇</button>
-
-          <button
-            className={`${styles.runBtn} ${running ? styles.runBtnRunning : ''}`}
-            onClick={runCode} disabled={running}
-          >
-            {running ? <><span className={styles.runSpinner} />Running...</> : <>▶ Run</>}
+          <button className={styles.iconBtn} onClick={downloadCode} title="Download">⬇</button>
+          <button className={`${styles.runBtn} ${running ? styles.runBtnRunning : ''}`}
+            onClick={runCode} disabled={running}>
+            {running ? <><span className={styles.runSpinner}/>Running...</> : <>▶ Run</>}
           </button>
-
           <button className={styles.leaveBtn} onClick={handleLeave}>Leave →</button>
         </div>
       </header>
 
       <div className={styles.editorWrapper}>
-        <Editor
-          height="100%"
-          language={LANGUAGES[language]?.monacoLang || 'python'}
-          defaultValue=""
-          onMount={handleEditorMount}
-          theme="collabDark"
+        <Editor height="100%" language={LANGUAGES[language]?.monacoLang || 'python'}
+          defaultValue="" onMount={handleEditorMount} theme="collabDark"
           options={{
-            fontSize: 14,
-            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-            fontLigatures: true,
-            lineHeight: 22,
-            padding: { top: 16, bottom: 16 },
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            smoothScrolling: true,
-            cursorBlinking: 'phase',
-            cursorSmoothCaretAnimation: 'on',
-            bracketPairColorization: { enabled: true },
-            automaticLayout: true,
-            tabSize: 4,
-            wordWrap: 'on',
-            renderLineHighlight: 'gutter',
+            fontSize: 14, fontFamily: "'JetBrains Mono', monospace", fontLigatures: true,
+            lineHeight: 22, padding: { top: 16, bottom: 16 }, minimap: { enabled: false },
+            scrollBeyondLastLine: false, smoothScrolling: true, cursorBlinking: 'phase',
+            cursorSmoothCaretAnimation: 'on', bracketPairColorization: { enabled: true },
+            automaticLayout: true, tabSize: 4, wordWrap: 'on', renderLineHighlight: 'gutter',
             scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 }
           }}
         />
@@ -527,7 +501,7 @@ export default function EditorScreen({ socket, session, onLeave }) {
             {output && !running && (
               <button className={styles.clearBtn} onClick={e => { e.stopPropagation(); setOutput(''); }}>Clear</button>
             )}
-            <span className={styles.toggleChevron}>{outputOpen ? '▾' : '▴'}</span>
+            <span>{outputOpen ? '▾' : '▴'}</span>
           </div>
         </div>
         {outputOpen && (

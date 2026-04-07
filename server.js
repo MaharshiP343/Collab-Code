@@ -5,18 +5,11 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-
 const io = new Server(server, {
   cors: { origin: process.env.CORS_ORIGIN || '*', methods: ['GET', 'POST'] }
 });
 
 const rooms = new Map();
-
-function calcInsertEnd(startLine, startCol, text) {
-  const lines = text.split('\n');
-  if (lines.length === 1) return { endLine: startLine, endCol: startCol + text.length };
-  return { endLine: startLine + lines.length - 1, endCol: lines[lines.length - 1].length + 1 };
-}
 
 function getRoom(roomId) {
   if (!rooms.has(roomId)) {
@@ -24,73 +17,152 @@ function getRoom(roomId) {
       code: '',
       language: 'python',
       users: new Map(),
-      // Permanent record of who typed what: [{ userId, color, startLine, startCol, endLine, endCol }]
-      typedRanges: []
+      // Authorship: parallel array to code chars. authorMap[i] = userId who typed char i
+      // We store as a string of fixed-width tokens for simplicity:
+      // Actually store as array of {userId} per character — but that's huge.
+      // Better: store as runs: [{userId, length}] — run-length encoding
+      authorRuns: []  // [{userId, len}]  covers entire code length
     });
   }
   return rooms.get(roomId);
 }
 
+// ── Run-length encoding helpers ─────────────────────────────────────────────
+function runsToFlat(runs) {
+  // Convert runs to flat array of userId per char
+  const flat = [];
+  for (const r of runs) {
+    for (let i = 0; i < r.len; i++) flat.push(r.userId);
+  }
+  return flat;
+}
+
+function flatToRuns(flat) {
+  if (flat.length === 0) return [];
+  const runs = [];
+  let cur = flat[0]; let len = 1;
+  for (let i = 1; i < flat.length; i++) {
+    if (flat[i] === cur) { len++; }
+    else { runs.push({ userId: cur, len }); cur = flat[i]; len = 1; }
+  }
+  runs.push({ userId: cur, len });
+  return runs;
+}
+
+function applyChangeToFlat(flat, rangeOffset, rangeLength, text, userId) {
+  // Delete rangeLength chars starting at rangeOffset, insert text chars owned by userId
+  const before = flat.slice(0, rangeOffset);
+  const after  = flat.slice(rangeOffset + rangeLength);
+  const inserted = Array(text.length).fill(userId);
+  return [...before, ...inserted, ...after];
+}
+
+// Convert flat authorship to decoration ranges for a given userId
+function flatToRanges(flat, code, userId) {
+  const ranges = [];
+  let i = 0;
+  let line = 1; let col = 1;
+
+  let inRun = false;
+  let runStartLine = 1; let runStartCol = 1;
+
+  while (i < flat.length) {
+    const owned = flat[i] === userId;
+    if (owned && !inRun) {
+      inRun = true; runStartLine = line; runStartCol = col;
+    } else if (!owned && inRun) {
+      ranges.push({ startLine: runStartLine, startCol: runStartCol, endLine: line, endCol: col });
+      inRun = false;
+    }
+    if (code[i] === '\n') { line++; col = 1; }
+    else { col++; }
+    i++;
+  }
+  if (inRun) {
+    ranges.push({ startLine: runStartLine, startCol: runStartCol, endLine: line, endCol: col });
+  }
+  return ranges;
+}
+
+// Build full decoration map: { userId → [{startLine,startCol,endLine,endCol}] }
+function buildDecorationMap(runs, code) {
+  const flat = runsToFlat(runs);
+  const userIds = [...new Set(flat.filter(Boolean))];
+  const map = {};
+  for (const uid of userIds) {
+    map[uid] = flatToRanges(flat, code, uid);
+  }
+  return map;
+}
+
+// ── Socket events ────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
 
   socket.on('join-room', ({ roomId, name, color }) => {
+    const room = getRoom(roomId);
+
+    // Enforce unique name and color
+    const existingNames  = [...room.users.values()].map(u => u.name.toLowerCase());
+    const existingColors = [...room.users.values()].map(u => u.color);
+
+    if (existingNames.includes(name.toLowerCase())) {
+      socket.emit('join-error', { message: `Name "${name}" is already taken in this room.` });
+      return;
+    }
+    if (existingColors.includes(color)) {
+      socket.emit('join-error', { message: `Color ${color} is already taken. Please pick another.` });
+      return;
+    }
+
     socket.join(roomId);
     socket.roomId = roomId;
     socket.userName = name;
-    const room = getRoom(roomId);
     room.users.set(socket.id, { name, color });
 
-    // Send full room state including ALL typed ranges so new joiner can underline history
+    // Build decoration map from current authorship state
+    const decorationMap = buildDecorationMap(room.authorRuns, room.code);
+
     socket.emit('room-state', {
       code: room.code,
       language: room.language,
-      users: Array.from(room.users.entries()).map(([id, u]) => ({ id, ...u })),
-      typedRanges: room.typedRanges
+      users: [...room.users.entries()].map(([id, u]) => ({ id, ...u })),
+      decorationMap  // { userId → ranges[] }
     });
 
     socket.to(roomId).emit('user-joined', { id: socket.id, name, color });
     console.log(`[room:${roomId}] ${name} joined (${room.users.size} total)`);
   });
 
-  // Delta-based sync — also record ranges server-side for future joiners
   socket.on('content-change', ({ changes, fullCode }) => {
     const room = rooms.get(socket.roomId);
     if (!room) return;
+
+    // Apply each change to the authorship flat array
+    let flat = runsToFlat(room.authorRuns);
+    for (const c of changes) {
+      flat = applyChangeToFlat(flat, c.rangeOffset, c.rangeLength, c.text, socket.id);
+    }
+    room.authorRuns = flatToRuns(flat);
     room.code = fullCode;
 
-    const user = room.users.get(socket.id);
-    const userColor = user?.color || '#ffffff';
-
-    // Store each inserted range permanently
-    changes.forEach(c => {
-      if (!c.text || c.text.length === 0) return;
-      const { endLine, endCol } = calcInsertEnd(
-        c.range.startLineNumber, c.range.startColumn, c.text
-      );
-      room.typedRanges.push({
-        userId: socket.id,
-        color: userColor,
-        startLine: c.range.startLineNumber,
-        startCol: c.range.startColumn,
-        endLine,
-        endCol
-      });
+    // Broadcast delta to others + updated decoration map for just this user
+    const userRanges = flatToRanges(flat, fullCode, socket.id);
+    socket.to(socket.roomId).emit('content-change', {
+      changes,
+      userId: socket.id,
+      userRanges  // updated ranges for the typing user only
     });
-
-    // Cap memory: keep last 10000 ranges
-    if (room.typedRanges.length > 10000) {
-      room.typedRanges = room.typedRanges.slice(-10000);
-    }
-
-    socket.to(socket.roomId).emit('content-change', { changes, userId: socket.id });
   });
 
-  // Full-code sync (used for uploaded files on join)
   socket.on('code-change', ({ code }) => {
     const room = rooms.get(socket.roomId);
     if (!room) return;
     room.code = code;
+    // Reset authorship — uploaded file, attribute all to uploader
+    room.authorRuns = code.length > 0 ? [{ userId: socket.id, len: code.length }] : [];
+    const decorationMap = buildDecorationMap(room.authorRuns, code);
     socket.to(socket.roomId).emit('code-change', { code });
+    socket.to(socket.roomId).emit('decoration-map', { decorationMap });
   });
 
   socket.on('language-change', ({ language }) => {
